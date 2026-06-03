@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1e293b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="Advanced Speech-to-Text with Intelligent Segmentation">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🎙️%3C/text%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🎙️%3C/text%3E%3C/svg%3E">
+<title>STT Dashboard</title>
+<link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+<header>
+  <div class="header-content">
+    <span class="logo">🎙️</span>
+    <h1>STT Dashboard</h1>
+    <span class="badge">Advanced Segmentation</span>
+  </div>
+</header>
+
+<main>
+  <section class="control-panel">
+    <div class="status-bar" id="statusBar">
+      <span class="status-indicator idle" id="statusIndicator"></span>
+      <span id="statusText">Ready</span>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-record" id="recordBtn" title="Record from microphone">
+        <span class="btn-icon">🎤</span>
+        <span class="btn-label" id="recordLabel">Record</span>
+      </button>
+
+      <label class="btn btn-upload" title="Upload a WAV file">
+        <span class="btn-icon">📁</span>
+        <span class="btn-label">Upload</span>
+        <input type="file" id="fileInput" accept=".wav,audio/wav" hidden>
+      </label>
+    </div>
+
+    <div class="recording-bar hidden" id="recordingBar">
+      <div class="waveform" id="waveform"></div>
+      <span id="recordingTimer">0:00</span>
+    </div>
+  </section>
+
+  <section class="results-panel hidden" id="resultsPanel">
+    <div class="panel-tabs">
+      <button class="tab active" data-tab="raw">Raw Transcription</button>
+      <button class="tab" data-tab="post">Post-Processed</button>
+    </div>
+
+    <div class="panel-content" id="rawResults">
+      <p class="placeholder">No segments transcribed yet.</p>
+    </div>
+
+    <div class="panel-content hidden" id="postResults">
+      <p class="placeholder">No segments processed yet.</p>
+    </div>
+  </section>
+</main>
+
+<script src="/static/js/wav-encoder.js"></script>
+<script src="/static/js/app.js"></script>
+</body>
+</html>
