@@ -13,47 +13,7 @@ Multi-pass STT service built on FastAPI + faster-whisper with WebRTC VAD silence
 
 ## Architecture
 
-```mermaid
-graph LR
-    subgraph Client["Client"]
-        A["PWA Dashboard<br/>Record / Upload"]:::client
-        B["curl / HTTP Client"]:::client
-    end
-
-    subgraph FastAPI["FastAPI Server"]
-        C["GET /<br/>serve index.html"]
-        D["POST /api/v1/transcribe<br/>UploadFile .wav"]
-        E["Validation<br/>.wav · &lt;50MB · non-empty"]
-        F["CORS Middleware"]
-    end
-
-    subgraph Pipeline["Pipeline Worker (ThreadPoolExecutor)"]
-        G["WAV Decode<br/>mono 16kHz float32"]
-        H["Pass 1: VAD Segmentation<br/>webrtcvad · 30ms frames<br/>silence &gt;0.5s → split"]
-        I["Pass 2: Raw Transcription<br/>faster-whisper small<br/>beam_size=5 · lang=en"]
-        J["Pass 3: Confidence Re-seg<br/>avg_logprob &lt;-0.6 → tag<br/>merge adjacent low-conf"]
-    end
-
-    subgraph Storage["Storage"]
-        K["Static Assets<br/>index.html · css · js"]
-        L["Whisper Model Cache<br/>/tmp/whisper-models"]
-    end
-
-    A --> C
-    B --> D
-    D --> E
-    E -->|valid WAV| G
-    G --> H
-    H --> I
-    I -->|SegmentResult[]| J
-    J -->|TranscriptionResponse<br/>{raw_results, post_processed_results}| D
-    C --> K
-
-    classDef client fill:#1e293b,stroke:#3b82f6,color:#f1f5f9
-    classDef fastapi fill:#1e293b,stroke:#3b82f6,color:#f1f5f9
-    classDef pipeline fill:#0f172a,stroke:#22c55e,color:#f1f5f9
-    classDef storage fill:#0f172a,stroke:#f59e0b,color:#f1f5f9
-```
+![Architecture Diagram](https://mermaid.ink/img/Z3JhcGggTFIKICAgIHN1YmdyYXBoIENsaWVudFsiQ2xpZW50Il0KICAgICAgICBBWyJQV0EgRGFzaGJvYXJkPGJyLz5SZWNvcmQgLyBVcGxvYWQiXQogICAgICAgIEJbImN1cmwgLyBIVFRQIENsaWVudCJdCiAgICBlbmQKICAgIHN1YmdyYXBoIEZhc3RBUElbIkZhc3RBUEkgU2VydmVyIl0KICAgICAgICBDWyJHRVQgLzxici8+c2VydmUgaW5kZXguaHRtbCJdCiAgICAgICAgRFsiUE9TVCAvYXBpL3YxL3RyYW5zY3JpYmU8YnIvPlVwbG9hZEZpbGUgLndhdiJdCiAgICAgICAgRVsiVmFsaWRhdGlvbjxici8+LndhdiAmbHQ7NTBNQiDCtyBub24tZW1wdHkiXQogICAgICAgIEZbIkNPUlMgTWlkZGxld2FyZSJdCiAgICBlbmQKICAgIHN1YmdyYXBoIFBpcGVsaW5lWyJQaXBlbGluZSBXb3JrZXIgKFRocmVhZFBvb2xFeGVjdXRvcikiXQogICAgICAgIEdbIldBViBEZWNvZGU8YnIvPm1vbm8gMTZrSHogZmxvYXQzMiJdCiAgICAgICAgSFsiUGFzcyAxOiBWQUQgU2VnbWVudGF0aW9uPGJyLz53ZWJydGN2YWQgwrcgMzBtcyBmcmFtZXM8YnIvPnNpbGVuY2UgPjAuNXMg4oaSIHNwbGl0Il0KICAgICAgICBJWyJQYXNzIDI6IFJhdyBUcmFuc2NyaXB0aW9uPGJyLz5mYXN0ZXItd2hpc3BlciBzbWFsbDxici8+YmVhbV9zaXplPTUgwrcgbGFuZz1lbiJdCiAgICAgICAgSlsiUGFzcyAzOiBDb25maWRlbmNlIFJlLXNlZzxici8+YXZnX2xvZ3Byb2IgJmx0Oy0wLjYg4oaSIHRhZzxici8+bWVyZ2UgYWRqYWNlbnQgbG93LWNvbmYiXQogICAgZW5kCiAgICBzdWJncmFwaCBTdG9yYWdlWyJTdG9yYWdlIl0KICAgICAgICBLWyJTdGF0aWMgQXNzZXRzPGJyLz5pbmRleC5odG1sIMK3IGNzcyDCtyBqcyJdCiAgICAgICAgTFsiV2hpc3BlciBNb2RlbCBDYWNoZTxici8+L3RtcC93aGlzcGVyLW1vZGVscyJdCiAgICBlbmQKICAgIEEgLS0+IEMKICAgIEIgLS0+IEQKICAgIEQgLS0+IEUKICAgIEUgLS0+fHZhbGlkIFdBVnwgRwogICAgRyAtLT4gSAogICAgSCAtLT4gSQogICAgSSAtLT58U2VnbWVudFJlc3VsdFtdfCBKCiAgICBKIC0tPnxUcmFuc2NyaXB0aW9uUmVzcG9uc2U8YnIvPntyYXdfcmVzdWx0cywgcG9zdF9wcm9jZXNzZWRfcmVzdWx0c318IEQKICAgIEMgLS0+IEsK)
 
 | Layer | Component | Responsibility |
 |---|---|---|
