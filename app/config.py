@@ -11,7 +11,7 @@ class Settings:
     sample_rate = int(os.getenv("SAMPLE_RATE", "16000"))
     silence_threshold_s = float(os.getenv("SILENCE_THRESHOLD_S", "0.5"))
 
-    confidence_threshold = float(os.getenv("CONFIDENCE_THRESHOLD", "-0.6"))
+    confidence_threshold = float(os.getenv("CONFIDENCE_THRESHOLD", "-0.3"))
 
     max_workers = int(os.getenv("MAX_WORKERS", "2"))
     max_file_size_mb = int(os.getenv("MAX_FILE_SIZE_MB", "50"))

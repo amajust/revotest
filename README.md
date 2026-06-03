@@ -69,7 +69,7 @@ All settings via environment variables (see `app/config.py`):
 | `FRAME_DURATION_MS` | `30` | VAD frame size in ms |
 | `SAMPLE_RATE` | `16000` | Target sample rate |
 | `SILENCE_THRESHOLD_S` | `0.5` | Silence gap for segmentation |
-| `CONFIDENCE_THRESHOLD` | `-0.6` | Logprob cutoff for low-confidence |
+| `CONFIDENCE_THRESHOLD` | `-0.3` | Logprob cutoff for low-confidence |
 | `MAX_WORKERS` | `2` | Thread pool size |
 | `MAX_FILE_SIZE_MB` | `50` | Upload size limit |
 | `MODEL_CACHE_DIR` | `/tmp/whisper-models` | Model weight cache path |
