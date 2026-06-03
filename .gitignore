@@ -23,3 +23,4 @@ Thumbs.db
 /tmp/
 /models/
 .agents/
+skills-lock.json
