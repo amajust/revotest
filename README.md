@@ -21,8 +21,9 @@ Multi-pass STT service built on FastAPI + faster-whisper with WebRTC VAD silence
 | Orchestration | `STTService` | 3-pass pipeline, thread-pool offloading |
 | Segmentation | `webrtcvad` | Frame-level VAD, configurable aggressiveness |
 | Transcription | `faster-whisper` (model=small) | Local inference, float32 on CPU |
-| Re-segmentation | `STTService._confidence_merge` | Threshold-based tagging and merging |
-| Config | `pydantic-settings` | Environment-overridable runtime parameters |
+| Re-segmentation | `STTService._re_segment` | Confidence-based tagging and merging |
+| Post-Processing | `PostProcessor` | ITN, disfluency removal, capitalization, profanity filter |
+| Config | `Settings` | Environment-overridable runtime parameters |
 
 ## API
 
@@ -30,7 +31,21 @@ Multi-pass STT service built on FastAPI + faster-whisper with WebRTC VAD silence
 
 **Request:** `multipart/form-data` with a `.wav` file (via upload or in-browser recording).
 
-**Response (200):** Returns both `raw_results` (pass 2) and `post_processed_results` (pass 3).
+**Response (200):** Returns both `raw_results` (pass 2 — direct transcript) and `post_processed_results` (pass 3 — cleaned and formatted).
+
+**Raw results** — literal verbatim transcription:
+- Lowercase, no punctuation, no formatting
+- Includes filler words (um, uh, like)
+- Spoken-form numbers and dates ("four hundred and fifty dollars")
+
+**Post-processed results** — polished readable transcript:
+- Disfluency removal (strip um/uh/you know)
+- Inverse Text Normalization ("four hundred and fifty dollars" → "$450")
+- Ordinal normalization ("first" → "1st", "third" → "3rd")
+- Currency symbol conversion ("five dollars" → "$5")
+- Capitalization restoration
+- Profanity filtering (masked as ****)
+- Low-confidence tagging (segments below threshold)
 
 ```json
 {
@@ -38,7 +53,7 @@ Multi-pass STT service built on FastAPI + faster-whisper with WebRTC VAD silence
     {
       "start": 0.0,
       "end": 2.34,
-      "text": "hello world",
+      "text": "um hello guys today we have like four hundred and fifty dollars in revenue",
       "avg_logprob": -0.1852
     }
   ],
@@ -46,7 +61,7 @@ Multi-pass STT service built on FastAPI + faster-whisper with WebRTC VAD silence
     {
       "start": 0.0,
       "end": 2.34,
-      "text": "hello world",
+      "text": "Hello guys today we have $450 in revenue",
       "avg_logprob": -0.1852,
       "low_confidence": false
     }

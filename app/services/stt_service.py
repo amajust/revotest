@@ -6,6 +6,7 @@ import numpy as np
 import webrtcvad
 
 from app.schemas import TranscriptionResponse, SegmentResult, PostProcessedSegment
+from app.services.post_processor import PostProcessor
 
 
 class STTService:
@@ -14,6 +15,7 @@ class STTService:
         self.executor = executor
         self.config = config
         self.vad = webrtcvad.Vad(config.vad_aggressiveness)
+        self.post_processor = PostProcessor(config)
 
     async def transcribe(self, audio_bytes):
         loop = asyncio.get_event_loop()
@@ -23,6 +25,8 @@ class STTService:
         audio = self._decode(audio_bytes)
         raw = self._transcribe(self._segment(audio))
         post = self._re_segment(raw)
+        for seg in post:
+            seg.text = self.post_processor.process(seg.text)
         return TranscriptionResponse(raw_results=raw, post_processed_results=post)
 
     def _decode(self, data):
