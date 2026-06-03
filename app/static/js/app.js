@@ -1,257 +1,221 @@
-(() => {
-  'use strict';
+const API = '/api/v1/transcribe';
 
-  const API_URL = '/api/v1/transcribe';
+const $ = (id) => document.getElementById(id);
+const el = {
+  recordBtn: $('recordBtn'),
+  recordLabel: $('recordLabel'),
+  fileInput: $('fileInput'),
+  statusText: $('statusText'),
+  statusIndicator: $('statusIndicator'),
+  recordingBar: $('recordingBar'),
+  recordingTimer: $('recordingTimer'),
+  waveform: $('waveform'),
+  resultsPanel: $('resultsPanel'),
+  rawResults: $('rawResults'),
+  postResults: $('postResults'),
+  tabs: document.querySelectorAll('.tab'),
+};
 
-  const elements = {
-    recordBtn: document.getElementById('recordBtn'),
-    recordLabel: document.getElementById('recordLabel'),
-    fileInput: document.getElementById('fileInput'),
-    statusText: document.getElementById('statusText'),
-    statusIndicator: document.getElementById('statusIndicator'),
-    statusBar: document.getElementById('statusBar'),
-    recordingBar: document.getElementById('recordingBar'),
-    recordingTimer: document.getElementById('recordingTimer'),
-    waveform: document.getElementById('waveform'),
-    resultsPanel: document.getElementById('resultsPanel'),
-    rawResults: document.getElementById('rawResults'),
-    postResults: document.getElementById('postResults'),
-    tabs: document.querySelectorAll('.tab'),
-  };
+let recorder = null;
+let chunks = [];
+let recording = false;
+let timer = null;
+let startTime = 0;
 
-  let mediaRecorder = null;
-  let audioChunks = [];
-  let recordingStartTime = 0;
-  let timerInterval = null;
-  let isRecording = false;
-
-  // Tab switching
-  elements.tabs.forEach((tab) => {
-    tab.addEventListener('click', () => {
-      elements.tabs.forEach((t) => t.classList.remove('active'));
-      tab.classList.add('active');
-      const target = tab.dataset.tab;
-      elements.rawResults.classList.toggle('hidden', target !== 'raw');
-      elements.postResults.classList.toggle('hidden', target !== 'post');
-    });
+el.tabs.forEach((tab) => {
+  tab.addEventListener('click', () => {
+    el.tabs.forEach((t) => t.classList.remove('active'));
+    tab.classList.add('active');
+    const target = tab.dataset.tab;
+    el.rawResults.classList.toggle('hidden', target !== 'raw');
+    el.postResults.classList.toggle('hidden', target !== 'post');
   });
+});
 
-  // Upload handler
-  elements.fileInput.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    await processFile(file);
-    elements.fileInput.value = '';
-  });
+el.fileInput.addEventListener('change', async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  await sendFile(f);
+  el.fileInput.value = '';
+});
 
-  // Record button
-  elements.recordBtn.addEventListener('click', () => {
-    if (isRecording) {
-      stopRecording();
-    } else {
-      startRecording();
+el.recordBtn.addEventListener('click', () => {
+  recording ? stop() : start();
+});
+
+function setStatus(text, type) {
+  el.statusText.textContent = text;
+  el.statusIndicator.className = 'status-indicator ' + type;
+}
+
+function setBusy(b) {
+  el.recordBtn.disabled = b;
+}
+
+async function start() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    setStatus('Mic not available', 'idle');
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+      ? 'audio/webm;codecs=opus'
+      : 'audio/webm';
+
+    recorder = new MediaRecorder(stream, { mimeType: mime });
+    chunks = [];
+
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
+    recorder.onstop = () => {
+      stream.getTracks().forEach((t) => t.stop());
+      processBlob(new Blob(chunks, { type: mime }));
+    };
+
+    recorder.start(100);
+    recording = true;
+    startTime = Date.now();
+
+    el.recordBtn.classList.add('recording');
+    el.recordLabel.textContent = 'Stop';
+    el.recordingBar.classList.remove('hidden');
+    setStatus('Recording...', 'recording');
+    startTimer();
+    animateWave();
+  } catch {
+    setStatus('Mic access denied', 'idle');
+  }
+}
+
+function stop() {
+  if (!recorder || recorder.state === 'inactive') return;
+  recorder.stop();
+  recording = false;
+  stopTimer();
+  el.recordBtn.classList.remove('recording');
+  el.recordLabel.textContent = 'Record';
+  el.recordingBar.classList.add('hidden');
+  setStatus('Processing...', 'processing');
+  setBusy(true);
+  el.waveform.innerHTML = '';
+}
+
+function startTimer() {
+  stopTimer();
+  timer = setInterval(() => {
+    const sec = Math.floor((Date.now() - startTime) / 1000);
+    el.recordingTimer.textContent =
+      String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
+  }, 200);
+}
+
+function stopTimer() {
+  if (timer) {
+    clearInterval(timer);
+    timer = null;
+  }
+}
+
+function animateWave() {
+  el.waveform.innerHTML = '';
+  for (let i = 0; i < 30; i++) {
+    const bar = document.createElement('div');
+    bar.className = 'waveform-bar';
+    bar.style.animationDelay = (i / 30) * 0.5 + 's';
+    bar.style.height = 4 + Math.random() * 32 + 'px';
+    el.waveform.appendChild(bar);
+  }
+}
+
+async function processBlob(blob) {
+  try {
+    const buf = await blob.arrayBuffer();
+    const ctx = new AudioContext({ sampleRate: 16000 });
+    const decoded = await ctx.decodeAudioData(buf);
+    const data = decoded.getChannelData(0);
+    await ctx.close();
+
+    const wav = WavEncoder.encode(data, decoded.sampleRate);
+    await sendFile(new File([wav], 'recording.wav', { type: 'audio/wav' }));
+  } catch {
+    setStatus('Audio decode failed', 'idle');
+    setBusy(false);
+  }
+}
+
+async function sendFile(file) {
+  setStatus('Transcribing...', 'processing');
+  setBusy(true);
+
+  const fd = new FormData();
+  fd.append('file', file);
+
+  try {
+    const res = await fetch(API, { method: 'POST', body: fd });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
     }
-  });
-
-  function setStatus(text, type) {
-    elements.statusText.textContent = text;
-    elements.statusIndicator.className = 'status-indicator ' + type;
+    const data = await res.json();
+    showResults(data);
+    setStatus('Done', 'idle');
+  } catch (err) {
+    setStatus('Error: ' + err.message, 'idle');
+  } finally {
+    setBusy(false);
   }
+}
 
-  function setBusy(busy) {
-    elements.recordBtn.disabled = busy;
+function showResults(data) {
+  el.resultsPanel.classList.remove('hidden');
+  renderSegments(el.rawResults, data.raw_results, false);
+  renderSegments(el.postResults, data.post_processed_results, true);
+  el.tabs[0].click();
+}
+
+function renderSegments(container, segs, showConf) {
+  if (!segs || !segs.length) {
+    container.innerHTML = '<p class="placeholder">No segments.</p>';
+    return;
   }
+  container.innerHTML = '';
+  for (const s of segs) {
+    const div = document.createElement('div');
+    div.className = 'segment';
+    if (showConf && s.low_confidence) div.classList.add('low-confidence');
 
-  async function startRecording() {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setStatus('Microphone not available in this browser', 'idle');
-      return;
+    const hdr = document.createElement('div');
+    hdr.className = 'segment-header';
+
+    const ts = document.createElement('span');
+    ts.className = 'segment-timestamp';
+    ts.textContent = s.start.toFixed(2) + 's \u2192 ' + s.end.toFixed(2) + 's';
+    hdr.appendChild(ts);
+
+    const lp = document.createElement('span');
+    lp.className = 'segment-logprob';
+    lp.textContent = 'logprob: ' + s.avg_logprob.toFixed(4);
+    hdr.appendChild(lp);
+
+    const txt = document.createElement('div');
+    txt.className = 'segment-text';
+    if (showConf && s.low_confidence) {
+      const tag = document.createElement('span');
+      tag.className = 'confidence-tag';
+      tag.textContent = 'Low Confidence';
+      txt.appendChild(tag);
     }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : 'audio/webm';
-
-      mediaRecorder = new MediaRecorder(stream, { mimeType });
-      audioChunks = [];
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunks.push(e.data);
-      };
-
-      mediaRecorder.onstop = () => {
-        stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(audioChunks, { type: mimeType });
-        processRecording(blob);
-      };
-
-      mediaRecorder.start(100);
-      isRecording = true;
-      recordingStartTime = Date.now();
-
-      elements.recordBtn.classList.add('recording');
-      elements.recordLabel.textContent = 'Stop';
-      elements.recordingBar.classList.remove('hidden');
-      setStatus('Recording...', 'recording');
-      startTimer();
-      animateWaveform();
-
-    } catch (err) {
-      setStatus('Microphone access denied', 'idle');
-    }
+    txt.appendChild(document.createTextNode(s.text));
+    div.appendChild(hdr);
+    div.appendChild(txt);
+    container.appendChild(div);
   }
+}
 
-  function stopRecording() {
-    if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
-    mediaRecorder.stop();
-    isRecording = false;
-    stopTimer();
-    elements.recordBtn.classList.remove('recording');
-    elements.recordLabel.textContent = 'Record';
-    elements.recordingBar.classList.add('hidden');
-    setStatus('Processing...', 'processing');
-    setBusy(true);
-    clearWaveform();
-  }
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/static/sw.js').catch(() => {});
+}
 
-  function startTimer() {
-    stopTimer();
-    timerInterval = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
-      const mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
-      const secs = String(elapsed % 60).padStart(2, '0');
-      elements.recordingTimer.textContent = `${mins}:${secs}`;
-    }, 200);
-  }
-
-  function stopTimer() {
-    if (timerInterval) {
-      clearInterval(timerInterval);
-      timerInterval = null;
-    }
-  }
-
-  function animateWaveform() {
-    elements.waveform.innerHTML = '';
-    const count = 30;
-    for (let i = 0; i < count; i++) {
-      const bar = document.createElement('div');
-      bar.className = 'waveform-bar';
-      const delay = (i / count) * 0.5;
-      const height = 4 + Math.random() * 32;
-      bar.style.animationDelay = `${delay}s`;
-      bar.style.height = `${height}px`;
-      elements.waveform.appendChild(bar);
-    }
-  }
-
-  function clearWaveform() {
-    elements.waveform.innerHTML = '';
-  }
-
-  async function processRecording(recordedBlob) {
-    try {
-      const arrayBuffer = await recordedBlob.arrayBuffer();
-      const audioCtx = new AudioContext({ sampleRate: 16000 });
-      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-      const channelData = audioBuffer.getChannelData(0);
-      await audioCtx.close();
-
-      const wavBlob = WavEncoder.encode(channelData, audioBuffer.sampleRate);
-      const file = new File([wavBlob], 'recording.wav', { type: 'audio/wav' });
-      await processFile(file);
-    } catch (err) {
-      setStatus('Failed to decode audio', 'idle');
-      setBusy(false);
-    }
-  }
-
-  async function processFile(file) {
-    setStatus('Transcribing...', 'processing');
-    setBusy(true);
-
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || `HTTP ${res.status}`);
-      }
-
-      const data = await res.json();
-      displayResults(data);
-      setStatus('Complete', 'idle');
-    } catch (err) {
-      setStatus(`Error: ${err.message}`, 'idle');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function displayResults(data) {
-    elements.resultsPanel.classList.remove('hidden');
-    renderSegments(elements.rawResults, data.raw_results, false);
-    renderSegments(elements.postResults, data.post_processed_results, true);
-    elements.tabs[0].click();
-  }
-
-  function renderSegments(container, segments, showConfidence) {
-    if (!segments || segments.length === 0) {
-      container.innerHTML = '<p class="placeholder">No segments returned.</p>';
-      return;
-    }
-
-    container.innerHTML = '';
-    for (const seg of segments) {
-      const div = document.createElement('div');
-      div.className = 'segment';
-      if (showConfidence && seg.low_confidence) {
-        div.classList.add('low-confidence');
-      }
-
-      const header = document.createElement('div');
-      header.className = 'segment-header';
-
-      const timestamp = document.createElement('span');
-      timestamp.className = 'segment-timestamp';
-      timestamp.textContent = `${seg.start.toFixed(2)}s → ${seg.end.toFixed(2)}s`;
-      header.appendChild(timestamp);
-
-      const logprob = document.createElement('span');
-      logprob.className = 'segment-logprob';
-      logprob.textContent = `logprob: ${seg.avg_logprob.toFixed(4)}`;
-      header.appendChild(logprob);
-
-      const textDiv = document.createElement('div');
-      textDiv.className = 'segment-text';
-
-      if (showConfidence && seg.low_confidence) {
-        const tag = document.createElement('span');
-        tag.className = 'confidence-tag';
-        tag.textContent = 'Low Confidence';
-        textDiv.appendChild(tag);
-      }
-
-      textDiv.appendChild(document.createTextNode(seg.text));
-      div.appendChild(header);
-      div.appendChild(textDiv);
-      container.appendChild(div);
-    }
-  }
-
-  // PWA: register service worker
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/static/sw.js').catch(() => {});
-  }
-
-  setStatus('Ready', 'idle');
-})();
+setStatus('Ready', 'idle');

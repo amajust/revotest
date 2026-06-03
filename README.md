@@ -2,26 +2,6 @@
 
 Multi-pass STT service built on FastAPI + faster-whisper with WebRTC VAD silence-based segmentation and confidence-driven re-segmentation.
 
-## Dataflow
-
-```mermaid
-graph TD
-    A[Upload .wav] --> B[Decode / Resample to 16kHz Mono PCM]
-    B --> C[Pass 1: WebRTC VAD Silence Segmentation]
-    C --> D[Audio Chunks]
-    D --> E[Pass 2: faster-whisper Transcription]
-    E --> F[Raw Segments with avg_logprob]
-    F --> G[Pass 3: Confidence Re-segmentation]
-    G --> H{avg_logprob < -0.6?}
-    H -- Yes --> I[Tag [Low Confidence] + Merge Adjacent]
-    H -- No --> J[Pass Through]
-    I --> K[Post-Processed Results]
-    J --> K
-    F --> L[Raw Results]
-    K --> M[JSON Response]
-    L --> M
-```
-
 ## Architecture
 
 | Layer | Component | Responsibility |
@@ -37,9 +17,10 @@ graph TD
 
 ### `POST /api/v1/transcribe`
 
-**Request:** `multipart/form-data` with a `.wav` file.
+**Request:** `multipart/form-data` with a `.wav` file (via upload or in-browser recording).
 
-**Response (200):**
+**Response (200):** Returns both `raw_results` (pass 2) and `post_processed_results` (pass 3).
+
 ```json
 {
   "raw_results": [
@@ -62,6 +43,8 @@ graph TD
 }
 ```
 
+Low-confidence segments (`avg_logprob < threshold`) get tagged `[Low Confidence]` in the text and `"low_confidence": true` in post-processed output.
+
 Errors: `400` (invalid file), `413` (too large), `500` (processing failure).
 
 ## Configuration
@@ -79,6 +62,15 @@ All settings via environment variables (see `app/config.py`):
 | `MAX_WORKERS` | `2` | Thread pool size |
 | `MAX_FILE_SIZE_MB` | `50` | Upload size limit |
 | `MODEL_CACHE_DIR` | `/tmp/whisper-models` | Model weight cache path |
+
+## Dashboard
+
+A PWA dashboard is served at `GET /` with two input modes:
+
+- **Record** — capture microphone audio, converts to WAV in-browser, sends to API
+- **Upload** — pick a `.wav` file directly
+
+Both modes display raw and post-processed results side by side via tabbed panels. Low-confidence segments are highlighted in red.
 
 ## Deployment (Google Cloud Run CPU-Gen2)
 

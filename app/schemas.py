@@ -1,15 +1,15 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class SegmentResult(BaseModel):
-    start: float = Field(description="Start time in seconds")
-    end: float = Field(description="End time in seconds")
-    text: str = Field(description="Transcribed text")
-    avg_logprob: float = Field(description="Average log probability of the transcription")
+    start: float
+    end: float
+    text: str
+    avg_logprob: float
 
 
 class PostProcessedSegment(SegmentResult):
-    low_confidence: bool = Field(description="Indicates if segment fell below confidence threshold")
+    low_confidence: bool
 
 
 class TranscriptionResponse(BaseModel):
