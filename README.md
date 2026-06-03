@@ -13,6 +13,48 @@ Multi-pass STT service built on FastAPI + faster-whisper with WebRTC VAD silence
 
 ## Architecture
 
+```mermaid
+graph LR
+    subgraph Client["Client"]
+        A["PWA Dashboard<br/>Record / Upload"]:::client
+        B["curl / HTTP Client"]:::client
+    end
+
+    subgraph FastAPI["FastAPI Server"]
+        C["GET /<br/>serve index.html"]
+        D["POST /api/v1/transcribe<br/>UploadFile .wav"]
+        E["Validation<br/>.wav · &lt;50MB · non-empty"]
+        F["CORS Middleware"]
+    end
+
+    subgraph Pipeline["Pipeline Worker (ThreadPoolExecutor)"]
+        G["WAV Decode<br/>mono 16kHz float32"]
+        H["Pass 1: VAD Segmentation<br/>webrtcvad · 30ms frames<br/>silence &gt;0.5s → split"]
+        I["Pass 2: Raw Transcription<br/>faster-whisper small<br/>beam_size=5 · lang=en"]
+        J["Pass 3: Confidence Re-seg<br/>avg_logprob &lt;-0.6 → tag<br/>merge adjacent low-conf"]
+    end
+
+    subgraph Storage["Storage"]
+        K["Static Assets<br/>index.html · css · js"]
+        L["Whisper Model Cache<br/>/tmp/whisper-models"]
+    end
+
+    A --> C
+    B --> D
+    D --> E
+    E -->|valid WAV| G
+    G --> H
+    H --> I
+    I -->|SegmentResult[]| J
+    J -->|TranscriptionResponse<br/>{raw_results, post_processed_results}| D
+    C --> K
+
+    classDef client fill:#1e293b,stroke:#3b82f6,color:#f1f5f9
+    classDef fastapi fill:#1e293b,stroke:#3b82f6,color:#f1f5f9
+    classDef pipeline fill:#0f172a,stroke:#22c55e,color:#f1f5f9
+    classDef storage fill:#0f172a,stroke:#f59e0b,color:#f1f5f9
+```
+
 | Layer | Component | Responsibility |
 |---|---|---|
 | Transport | FastAPI + Uvicorn | ASGI HTTP server, CORS, file validation |
