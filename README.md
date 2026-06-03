@@ -1,3 +1,12 @@
+---
+title: RevoTest STT
+emoji: 🎙️
+colorFrom: indigo
+colorTo: blue
+sdk: docker
+pinned: false
+---
+
 # Advanced Speech-to-Text with Intelligent Segmentation
 
 Multi-pass STT service built on FastAPI + faster-whisper with WebRTC VAD silence-based segmentation and confidence-driven re-segmentation.
